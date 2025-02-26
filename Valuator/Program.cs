@@ -1,4 +1,5 @@
 namespace Valuator;
+using StackExchange.Redis;
 
 public class Program
 {
@@ -6,12 +7,21 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
-        // Add services to the container.
+        // Добавляем сервисы в контейнер.
         builder.Services.AddRazorPages();
+
+        // Добавляем Redis
+        builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect("localhost:6379"));
+        
+        // var redis = ConnectionMultiplexer.Connect("localhost:6379");
+        // var db = redis.GetDatabase();
+        // db.StringSet("test-key", "Hello, Redis!");
+        // string value = db.StringGet("test-key");
+        // Console.WriteLine($"Value from Redis: {value}");
 
         var app = builder.Build();
 
-        // Configure the HTTP request pipeline.
+        // Настраиваем конвейер HTTP-запросов.
         if (!app.Environment.IsDevelopment())
         {
             app.UseExceptionHandler("/Error");
