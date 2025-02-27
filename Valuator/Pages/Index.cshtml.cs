@@ -63,8 +63,7 @@ public class IndexModel : PageModel
     private bool CheckForDuplicates(string text)
     {
         var db = _redis.GetDatabase();
-    
-        // Получаем все сохранённые тексты из множества в Redis
+        
         var texts = db.SetMembers("TEXTS");
 
         foreach (var storedText in texts)
@@ -74,8 +73,7 @@ public class IndexModel : PageModel
                 return true;
             }
         }
-
-        // Если не найден дубликат, добавляем текст в Redis
+        
         db.SetAdd("TEXTS", text);
         return false;
     }
