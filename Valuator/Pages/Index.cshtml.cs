@@ -7,12 +7,12 @@ namespace Valuator.Pages;
 public class IndexModel : PageModel
 {
     private readonly ILogger<IndexModel> _logger;
-    private readonly IDatabase _db; // Поле для работы с Redis
+    private readonly IDatabase _db;
 
     public IndexModel(ILogger<IndexModel> logger, IConnectionMultiplexer redis)
     {
         _logger = logger;
-        _db = redis.GetDatabase(); // Инициализация базы данных Redis
+        _db = redis.GetDatabase();
     }
 
     public void OnGet()
@@ -60,33 +60,27 @@ public class IndexModel : PageModel
 
     private bool CheckForDuplicates(string text)
     {
-        // Получаем сервер Redis
         var server = _db.Multiplexer.GetServer(_db.Multiplexer.GetEndPoints().First());
-
-        // Ищем все ключи с префиксом "TEXT-*"
+        
         var keys = server.Keys(pattern: "TEXT-*");
-
-        // Проходим по всем найденным ключам
+        
         foreach (var key in keys)
         {
             try
             {
-                // Получаем текст по ключу
                 var storedText = _db.StringGet(key);
                 if (storedText == text)
                 {
-                    return true; // Найден дубликат
+                    return true;
                 }
             }
             catch (Exception ex)
             {
-                // Логируем ошибку, если что-то пошло не так
                 _logger.LogError(ex, "Ошибка при получении текста из Redis по ключу {Key}", key);
                 continue;
             }
         }
-
-        // Если дубликатов не найдено, возвращаем false
+        
         return false;
     }
 }
