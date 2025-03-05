@@ -53,9 +53,7 @@ public class IndexModel : PageModel
             (i, c) => Char.IsLetter(c) ? i : i + 1
         );
 
-        return notAlphabetCharsCount == 0 
-            ? 0 
-            : Math.Round(notAlphabetCharsCount / text.Length, 2);
+        return notAlphabetCharsCount == 0 ? 0 : Math.Round(notAlphabetCharsCount / text.Length, 2);
     }
 
     private bool CheckForDuplicates(string text)
