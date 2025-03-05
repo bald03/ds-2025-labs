@@ -8,7 +8,7 @@ namespace Valuator.Pages;
 public class SummaryModel : PageModel
 {
     private readonly ILogger<SummaryModel> _logger;
-    private readonly IConnectionMultiplexer _redis;
+    private readonly IDatabase _db; // Поле для работы с Redis
 
     private const string RankPrefix = "RANK-";
     private const string SimilarityPrefix = "SIMILARITY-";
@@ -16,7 +16,7 @@ public class SummaryModel : PageModel
     public SummaryModel(ILogger<SummaryModel> logger, IConnectionMultiplexer redis)
     {
         _logger = logger;
-        _redis = redis;
+        _db = redis.GetDatabase(); // Инициализация базы данных Redis
     }
 
     public double Rank { get; set; }
@@ -26,16 +26,14 @@ public class SummaryModel : PageModel
     {
         _logger.LogDebug(id);
 
-        var db = _redis.GetDatabase();
-
         // Получаем rank из Redis
         string rankKey = RankPrefix + id;
-        string rankValue = db.StringGet(rankKey);
+        string rankValue = _db.StringGet(rankKey);
         Rank = ParseDouble(rankValue);
 
         // Получаем similarity из Redis
         string similarityKey = SimilarityPrefix + id;
-        string similarityValue = db.StringGet(similarityKey);
+        string similarityValue = _db.StringGet(similarityKey);
         Similarity = ParseDouble(similarityValue);
     }
 

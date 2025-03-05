@@ -7,12 +7,12 @@ namespace Valuator.Pages;
 public class IndexModel : PageModel
 {
     private readonly ILogger<IndexModel> _logger;
-    private readonly IConnectionMultiplexer _redis;
+    private readonly IDatabase _db; // Поле для работы с Redis
 
     public IndexModel(ILogger<IndexModel> logger, IConnectionMultiplexer redis)
     {
         _logger = logger;
-        _redis = redis;
+        _db = redis.GetDatabase(); // Инициализация базы данных Redis
     }
 
     public void OnGet()
@@ -29,21 +29,19 @@ public class IndexModel : PageModel
             return Redirect($"summary");
         }
 
+        bool isDuplicate = CheckForDuplicates(text);
+
         string id = Guid.NewGuid().ToString();
-
-        // Сохраняем текст в Redis
         string textKey = "TEXT-" + id;
-        _redis.GetDatabase().StringSet(textKey, text);
+        _db.StringSet(textKey, text);
 
-        // Рассчитываем rank
         double rank = CalculateRank(text);
         string rankKey = "RANK-" + id;
-        _redis.GetDatabase().StringSet(rankKey, rank);
+        _db.StringSet(rankKey, rank);
 
-        // Проверяем текст на дубликаты
-        int similarity = CheckForDuplicates(text) ? 1 : 0;
+        int similarity = isDuplicate ? 1 : 0;
         string similarityKey = "SIMILARITY-" + id;
-        _redis.GetDatabase().StringSet(similarityKey, similarity);
+        _db.StringSet(similarityKey, similarity);
 
         return Redirect($"summary?id={id}");
     }
@@ -62,20 +60,33 @@ public class IndexModel : PageModel
 
     private bool CheckForDuplicates(string text)
     {
-        var db = _redis.GetDatabase();
-        
-        var texts = db.SetMembers("TEXTS");
+        // Получаем сервер Redis
+        var server = _db.Multiplexer.GetServer(_db.Multiplexer.GetEndPoints().First());
 
-        foreach (var storedText in texts)
+        // Ищем все ключи с префиксом "TEXT-*"
+        var keys = server.Keys(pattern: "TEXT-*");
+
+        // Проходим по всем найденным ключам
+        foreach (var key in keys)
         {
-            if (string.Equals(storedText, text, StringComparison.OrdinalIgnoreCase))
+            try
             {
-                return true;
+                // Получаем текст по ключу
+                var storedText = _db.StringGet(key);
+                if (storedText == text)
+                {
+                    return true; // Найден дубликат
+                }
+            }
+            catch (Exception ex)
+            {
+                // Логируем ошибку, если что-то пошло не так
+                _logger.LogError(ex, "Ошибка при получении текста из Redis по ключу {Key}", key);
+                continue;
             }
         }
-        
-        db.SetAdd("TEXTS", text);
+
+        // Если дубликатов не найдено, возвращаем false
         return false;
     }
-
 }
