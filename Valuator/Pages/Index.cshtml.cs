@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using RabbitMQ.Client;
 using StackExchange.Redis;
+using System.Text;
 
 namespace Valuator.Pages;
 
@@ -8,77 +10,72 @@ public class IndexModel : PageModel
 {
     private readonly ILogger<IndexModel> _logger;
     private readonly IDatabase _db;
+    private readonly IConnection _rabbitConnection;
 
-    public IndexModel(ILogger<IndexModel> logger, IConnectionMultiplexer redis)
+    public IndexModel(
+        ILogger<IndexModel> logger,
+        IConnectionMultiplexer redis,
+        IConnection rabbitConnection)
     {
         _logger = logger;
         _db = redis.GetDatabase();
+        _rabbitConnection = rabbitConnection;
     }
 
-    public void OnGet()
-    {
-
-    }
+    public void OnGet() { }
 
     public IActionResult OnPost(string text)
     {
-        _logger.LogDebug(text);
+        _logger.LogDebug("Received text: {Text}", text);
 
         if (string.IsNullOrEmpty(text))
-        {
-            return Redirect($"summary");
-        }
-
-        bool isDuplicate = CheckForDuplicates(text);
+            return RedirectToPage("Summary");
 
         string id = Guid.NewGuid().ToString();
-        string textKey = "TEXT-" + id;
-        _db.StringSet(textKey, text);
+        _db.StringSet($"TEXT-{id}", text);
+        _db.StringSet($"SIMILARITY-{id}", CheckForDuplicates(text) ? 1 : 0);
 
-        double rank = CalculateRank(text);
-        string rankKey = "RANK-" + id;
-        _db.StringSet(rankKey, rank);
+        SendToRabbitMQ(id);
 
-        int similarity = isDuplicate ? 1 : 0;
-        string similarityKey = "SIMILARITY-" + id;
-        _db.StringSet(similarityKey, similarity);
-
-        return Redirect($"summary?id={id}");
+        return RedirectToPage("Summary", new { id });
     }
 
-    private static double CalculateRank(string text)
+    private void SendToRabbitMQ(string id)
     {
-        double notAlphabetCharsCount = text.Aggregate(
-            0,
-            (i, c) => Char.IsLetter(c) ? i : i + 1
-        );
+        try
+        {
+            using var channel = _rabbitConnection.CreateModel();
+            channel.QueueDeclare(
+                queue: "rank_queue",
+                durable: true,
+                exclusive: false,
+                autoDelete: false,
+                arguments: null);
 
-        return notAlphabetCharsCount == 0 ? 0 : Math.Round(notAlphabetCharsCount / text.Length, 2);
+            var properties = channel.CreateBasicProperties();
+            properties.Persistent = true;
+
+            channel.BasicPublish(
+                exchange: "",
+                routingKey: "rank_queue",
+                basicProperties: properties,
+                body: Encoding.UTF8.GetBytes(id));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "RabbitMQ error");
+            throw;
+        }
     }
 
     private bool CheckForDuplicates(string text)
     {
         var server = _db.Multiplexer.GetServer(_db.Multiplexer.GetEndPoints().First());
-        
-        var keys = server.Keys(pattern: "TEXT-*");
-        
-        foreach (var key in keys)
+        foreach (var key in server.Keys(pattern: "TEXT-*"))
         {
-            try
-            {
-                var storedText = _db.StringGet(key);
-                if (storedText == text)
-                {
-                    return true;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Ошибка при получении текста из Redis по ключу {Key}", key);
-                continue;
-            }
+            if (_db.StringGet(key) == text)
+                return true;
         }
-        
         return false;
     }
 }
