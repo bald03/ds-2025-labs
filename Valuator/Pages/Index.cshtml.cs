@@ -32,8 +32,9 @@ public class IndexModel : PageModel
             return RedirectToPage("Summary");
 
         string id = Guid.NewGuid().ToString();
-        _db.StringSet($"TEXT-{id}", text);
         _db.StringSet($"SIMILARITY-{id}", CheckForDuplicates(text) ? 1 : 0);
+        _db.StringSet($"TEXT-{id}", text);
+        //_db.StringSet($"SIMILARITY-{id}", CheckForDuplicates(text) ? 1 : 0);
 
         SendToRabbitMQ(id);
 

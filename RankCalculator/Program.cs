@@ -5,7 +5,7 @@ using System.Text;
 
 Console.WriteLine("Starting RankCalculator...");
 
-// Redis connectiondsdsds
+// Redis connection
 using var redis = ConnectionMultiplexer.Connect("localhost");
 var db = redis.GetDatabase();
 
