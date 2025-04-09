@@ -26,17 +26,9 @@ public class SummaryModel : PageModel
     {
         _logger.LogDebug(id);
         
-        if (!_db.KeyExists($"{RankPrefix}{id}"))
-        {
-            ViewData["StatusMessage"] = "Оценка содержания не завершена";
-            Rank = 0;
-        }
-        else
-        {
-            string rankKey = RankPrefix + id;
-            string rankValue = _db.StringGet(rankKey);
-            Rank = ParseDouble(rankValue);
-        }
+        string rankKey = RankPrefix + id;
+        string rankValue = _db.StringGet(rankKey);
+        Rank = ParseDouble(rankValue);
         
         string similarityKey = SimilarityPrefix + id;
         string similarityValue = _db.StringGet(similarityKey);
