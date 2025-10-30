@@ -1,47 +1,46 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics.Tracing;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace Valuator.Pages;
-
 public class SummaryModel : PageModel
 {
+    private readonly IDatabase _redisDb;
     private readonly ILogger<SummaryModel> _logger;
-    private readonly IDatabase _db;
-
-    private const string RankPrefix = "RANK-";
-    private const string SimilarityPrefix = "SIMILARITY-";
 
     public SummaryModel(ILogger<SummaryModel> logger, IConnectionMultiplexer redis)
     {
         _logger = logger;
-        _db = redis.GetDatabase();
+        _redisDb = redis.GetDatabase();
     }
 
     public double Rank { get; set; }
     public double Similarity { get; set; }
 
-    public void OnGet(string id)
+    public async Task OnGetAsync(string id)
     {
-        _logger.LogDebug(id);
-        
-        string rankKey = RankPrefix + id;
-        string rankValue = _db.StringGet(rankKey);
-        Rank = ParseDouble(rankValue);
-        
-        string similarityKey = SimilarityPrefix + id;
-        string similarityValue = _db.StringGet(similarityKey);
-        Similarity = ParseDouble(similarityValue);
-    }
+        string rankKey = "RANK-" + id;
+        string similarityKey = "SIMILARITY-" + id;
+        _logger.LogInformation($"OnGetAsync: {"RANK-" + id}");
+        string rankValue =  await _redisDb.StringGetAsync(rankKey);
 
-    private double ParseDouble(string? num)
-    {
-        if (num == null)
+        while (rankValue == null)
         {
-            return 0;
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            rankValue = await _redisDb.StringGetAsync(rankKey);
         }
-
-        return double.Parse(num, System.Globalization.CultureInfo.InvariantCulture);
+        _logger.LogInformation($"OnGetAsync: {id}, {rankValue}");
+        string similarityValue = _redisDb.StringGet(similarityKey);
+        Console.WriteLine($"OnGetAsync: {rankValue}");
+        Rank = double.Parse(rankValue);
+        Similarity = double.Parse(similarityValue);
     }
 }

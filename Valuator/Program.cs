@@ -1,6 +1,9 @@
-namespace Valuator;
+using Microsoft.Extensions.Caching.Distributed;
 using StackExchange.Redis;
-using RabbitMQ.Client;
+using System.Runtime.Intrinsics.X86;
+using System.Text;
+
+namespace Valuator;
 
 public class Program
 {
@@ -8,27 +11,18 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
-        // Добавляем сервисы в контейнер.
-        builder.Services.AddRazorPages();
 
-        // Добавляем Redis
-        builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect("localhost:6379"));
-        
-        // Добавляем RabbitMQ connection как singleton
-        builder.Services.AddSingleton<IConnection>(sp => 
-        {
-            var factory = new ConnectionFactory()
-            {
-                HostName = "localhost",
-                UserName = "guest",
-                Password = "guest"
-            };
-            return factory.CreateConnection();
-        });
+        var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+        var redis = ConnectionMultiplexer.Connect(redisConnectionString);
+        builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
+
+
+        // Add services to the container.
+        builder.Services.AddRazorPages();
 
         var app = builder.Build();
 
-        // Настраиваем конвейер HTTP-запросов.
+        // Configure the HTTP request pipeline.
         if (!app.Environment.IsDevelopment())
         {
             app.UseExceptionHandler("/Error");
